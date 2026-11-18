@@ -1,0 +1,6 @@
+{
+  "name": "FixMyApp AI",
+  "description": "Upload, inspect, auto-repair, and deploy websites directly from your Android phone without coding. Supports English and Hindi.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,195 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.preferredLanguage in ['EN', 'HI'] &&
+             data.plan == 'FREE';
+    }
+
+    function isValidProject(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 80 &&
+             data.status in ['UPLOADED', 'INSPECTED', 'REPAIRED', 'DEPLOYED'] &&
+             data.fileCount is int && data.fileCount >= 0 && data.fileCount <= 500 &&
+             data.totalBytes is int && data.totalBytes >= 0 && data.totalBytes <= 26214400 &&
+             data.errorsDetected is int && data.errorsDetected >= 0 && data.errorsDetected <= 10000 &&
+             data.errorsFixed is int && data.errorsFixed >= 0 && data.errorsFixed <= 10000 &&
+             data.remainingErrors is int && data.remainingErrors >= 0 && data.remainingErrors <= 10000 &&
+             (!('deployUrl' in data) || (data.deployUrl is string && data.deployUrl.size() <= 500)) &&
+             (!('aiSummaryEn' in data) || (data.aiSummaryEn is string && data.aiSummaryEn.size() <= 4000)) &&
+             (!('aiSummaryHi' in data) || (data.aiSummaryHi is string && data.aiSummaryHi.size() <= 4000));
+    }
+
+    function isValidProjectFile(data, userId, projectId) {
+      return data.userId is string && data.userId == userId &&
+             data.projectId is string && data.projectId == projectId &&
+             data.relativePath is string && data.relativePath.size() >= 1 && data.relativePath.size() <= 200 &&
+             data.fileType in ['HTML', 'CSS', 'JS', 'ASSET', 'OTHER'] &&
+             data.sizeBytes is int && data.sizeBytes >= 0 && data.sizeBytes <= 26214400 &&
+             data.originalContent is string && data.originalContent.size() <= 300000 &&
+             (!('repairedContent' in data) || (data.repairedContent is string && data.repairedContent.size() <= 350000));
+    }
+
+    function isValidProjectIssue(data, userId, projectId) {
+      return data.userId is string && data.userId == userId &&
+             data.projectId is string && data.projectId == projectId &&
+             data.code is string && data.code.size() >= 1 && data.code.size() <= 80 &&
+             data.category in ['HTML', 'CSS', 'JS', 'PATHS', 'ASSETS', 'RESPONSIVE', 'NAVIGATION', 'DEPLOYMENT'] &&
+             data.severity in ['CRITICAL', 'WARNING', 'INFO'] &&
+             data.filePath is string && data.filePath.size() >= 1 && data.filePath.size() <= 200 &&
+             data.lineNumber is int && data.lineNumber >= 1 && data.lineNumber <= 100000 &&
+             data.autoFixable is bool &&
+             data.fixed is bool &&
+             data.titleEn is string && data.titleEn.size() >= 1 && data.titleEn.size() <= 300 &&
+             data.descEn is string && data.descEn.size() >= 1 && data.descEn.size() <= 1500 &&
+             data.fixEn is string && data.fixEn.size() >= 1 && data.fixEn.size() <= 1500 &&
+             data.titleHi is string && data.titleHi.size() >= 1 && data.titleHi.size() <= 300 &&
+             data.descHi is string && data.descHi.size() >= 1 && data.descHi.size() <= 1500 &&
+             data.fixHi is string && data.fixHi.size() >= 1 && data.fixHi.size() <= 1500;
+    }
+
+    function isValidDownloadLog(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.projectId is string && isValidId(data.projectId) &&
+             data.projectName is string && data.projectName.size() >= 1 && data.projectName.size() <= 80 &&
+             data.version in ['REPAIRED', 'ORIGINAL'] &&
+             data.fileCount is int && data.fileCount >= 0 && data.fileCount <= 500;
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) && isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'preferredLanguage', 'plan', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'preferredLanguage', 'plan', 'createdAt', 'updatedAt']) &&
+                       incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) && isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().plan == existing().plan &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'preferredLanguage', 'updatedAt']);
+
+      allow delete: if false;
+
+      match /projects/{projectId} {
+        allow get: if isOwner(userId) && isValidId(projectId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) && isValidId(projectId) &&
+                         incoming().keys().hasAll(['userId', 'name', 'status', 'fileCount', 'totalBytes', 'errorsDetected', 'errorsFixed', 'remainingErrors', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'name', 'status', 'fileCount', 'totalBytes', 'errorsDetected', 'errorsFixed', 'remainingErrors', 'deployUrl', 'aiSummaryEn', 'aiSummaryHi', 'createdAt', 'updatedAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         isValidProject(incoming(), userId);
+
+        allow update: if isOwner(userId) && isValidId(projectId) &&
+                         isValidProject(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                         (
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'errorsDetected', 'remainingErrors', 'aiSummaryEn', 'aiSummaryHi', 'updatedAt']) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'errorsDetected', 'errorsFixed', 'remainingErrors', 'updatedAt']) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'deployUrl', 'updatedAt']) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['name', 'updatedAt'])
+                         );
+
+        allow delete: if isOwner(userId) && isValidId(projectId);
+
+        match /files/{fileId} {
+          allow get: if isOwner(userId) && isValidId(projectId) && isValidId(fileId);
+          allow list: if isOwner(userId) && isValidId(projectId);
+
+          allow create: if isOwner(userId) && isValidId(projectId) && isValidId(fileId) &&
+                           incoming().keys().hasAll(['userId', 'projectId', 'relativePath', 'fileType', 'sizeBytes', 'originalContent', 'createdAt', 'updatedAt']) &&
+                           incoming().keys().hasOnly(['userId', 'projectId', 'relativePath', 'fileType', 'sizeBytes', 'originalContent', 'repairedContent', 'createdAt', 'updatedAt']) &&
+                           incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                           incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                           isValidProjectFile(incoming(), userId, projectId) &&
+                           existsAfter(/databases/$(database)/documents/users/$(userId)/projects/$(projectId));
+
+          allow update: if isOwner(userId) && isValidId(projectId) && isValidId(fileId) &&
+                           isValidProjectFile(incoming(), userId, projectId) &&
+                           incoming().userId == existing().userId &&
+                           incoming().projectId == existing().projectId &&
+                           incoming().originalContent == existing().originalContent &&
+                           incoming().createdAt == existing().createdAt &&
+                           incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['repairedContent', 'updatedAt']);
+
+          allow delete: if isOwner(userId) && isValidId(projectId) && isValidId(fileId);
+        }
+
+        match /issues/{issueId} {
+          allow get: if isOwner(userId) && isValidId(projectId) && isValidId(issueId);
+          allow list: if isOwner(userId) && isValidId(projectId);
+
+          allow create: if isOwner(userId) && isValidId(projectId) && isValidId(issueId) &&
+                           incoming().keys().hasAll(['userId', 'projectId', 'code', 'category', 'severity', 'filePath', 'lineNumber', 'autoFixable', 'fixed', 'titleEn', 'descEn', 'fixEn', 'titleHi', 'descHi', 'fixHi', 'createdAt', 'updatedAt']) &&
+                           incoming().keys().hasOnly(['userId', 'projectId', 'code', 'category', 'severity', 'filePath', 'lineNumber', 'autoFixable', 'fixed', 'titleEn', 'descEn', 'fixEn', 'titleHi', 'descHi', 'fixHi', 'createdAt', 'updatedAt']) &&
+                           incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                           incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                           isValidProjectIssue(incoming(), userId, projectId) &&
+                           existsAfter(/databases/$(database)/documents/users/$(userId)/projects/$(projectId));
+
+          allow update: if isOwner(userId) && isValidId(projectId) && isValidId(issueId) &&
+                           isValidProjectIssue(incoming(), userId, projectId) &&
+                           incoming().userId == existing().userId &&
+                           incoming().projectId == existing().projectId &&
+                           incoming().createdAt == existing().createdAt &&
+                           incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['fixed', 'updatedAt']);
+
+          allow delete: if isOwner(userId) && isValidId(projectId) && isValidId(issueId);
+        }
+      }
+
+      match /downloads/{downloadId} {
+        allow get: if isOwner(userId) && isValidId(downloadId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) && isValidId(downloadId) &&
+                         incoming().keys().hasAll(['userId', 'projectId', 'projectName', 'version', 'fileCount', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'projectId', 'projectName', 'version', 'fileCount', 'createdAt']) &&
+                         incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+                         isValidDownloadLog(incoming(), userId);
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(downloadId);
+      }
+    }
+  }
+}

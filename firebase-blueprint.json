@@ -1,0 +1,117 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile and UI preferences.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "preferredLanguage": { "type": "string", "enum": ["EN", "HI"], "description": "Selected explanation language" },
+        "plan": { "type": "string", "enum": ["FREE"], "description": "Active SaaS tier" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "displayName", "preferredLanguage", "plan", "createdAt", "updatedAt"]
+    },
+    "WebsiteProject": {
+      "title": "WebsiteProject",
+      "description": "Uploaded website project metadata, inspection counts, repair status, and deployment URL.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "name": { "type": "string", "description": "Project title" },
+        "status": { "type": "string", "enum": ["UPLOADED", "INSPECTED", "REPAIRED", "DEPLOYED"], "description": "Lifecycle status" },
+        "fileCount": { "type": "integer", "description": "Total uploaded files" },
+        "totalBytes": { "type": "integer", "description": "Total bytes uploaded" },
+        "errorsDetected": { "type": "integer", "description": "Total issues detected" },
+        "errorsFixed": { "type": "integer", "description": "Verified issues fixed" },
+        "remainingErrors": { "type": "integer", "description": "Remaining issues after validation" },
+        "deployUrl": { "type": "string", "description": "Public Netlify site URL if deployed" },
+        "aiSummaryEn": { "type": "string", "description": "AI inspection summary in English" },
+        "aiSummaryHi": { "type": "string", "description": "AI inspection summary in Hindi" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "name", "status", "fileCount", "totalBytes", "errorsDetected", "errorsFixed", "remainingErrors", "createdAt", "updatedAt"]
+    },
+    "ProjectFile": {
+      "title": "ProjectFile",
+      "description": "Individual website file belonging to a project with preserved original and repaired code.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "projectId": { "type": "string", "description": "Parent WebsiteProject ID" },
+        "relativePath": { "type": "string", "description": "Normalized relative file path" },
+        "fileType": { "type": "string", "enum": ["HTML", "CSS", "JS", "ASSET", "OTHER"], "description": "Detected file category" },
+        "sizeBytes": { "type": "integer", "description": "File size in bytes" },
+        "originalContent": { "type": "string", "description": "Original source text preserved untouched" },
+        "repairedContent": { "type": "string", "description": "Repaired source text after validation" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["userId", "projectId", "relativePath", "fileType", "sizeBytes", "originalContent", "createdAt", "updatedAt"]
+    },
+    "ProjectIssue": {
+      "title": "ProjectIssue",
+      "description": "Detected website error or readiness issue with English and Hindi explanations.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "projectId": { "type": "string", "description": "Parent WebsiteProject ID" },
+        "code": { "type": "string", "description": "Deterministic or AI issue code" },
+        "category": { "type": "string", "enum": ["HTML", "CSS", "JS", "PATHS", "ASSETS", "RESPONSIVE", "NAVIGATION", "DEPLOYMENT"] },
+        "severity": { "type": "string", "enum": ["CRITICAL", "WARNING", "INFO"] },
+        "filePath": { "type": "string", "description": "Affected file path" },
+        "lineNumber": { "type": "integer", "description": "1-based line number" },
+        "autoFixable": { "type": "boolean", "description": "Whether eligible for safe auto-repair" },
+        "fixed": { "type": "boolean", "description": "Verified fixed after re-inspection" },
+        "titleEn": { "type": "string" },
+        "descEn": { "type": "string" },
+        "fixEn": { "type": "string" },
+        "titleHi": { "type": "string" },
+        "descHi": { "type": "string" },
+        "fixHi": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "projectId", "code", "category", "severity", "filePath", "lineNumber", "autoFixable", "fixed", "titleEn", "descEn", "fixEn", "titleHi", "descHi", "fixHi", "createdAt", "updatedAt"]
+    },
+    "DownloadLog": {
+      "title": "DownloadLog",
+      "description": "Audit log of exported ZIP archives.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
+        "version": { "type": "string", "enum": ["REPAIRED", "ORIGINAL"] },
+        "fileCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "projectId", "projectName", "version", "fileCount", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user profile and language preference."
+    },
+    "/users/{userId}/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/WebsiteProject" },
+      "description": "User's uploaded website projects."
+    },
+    "/users/{userId}/projects/{projectId}/files/{fileId}": {
+      "schema": { "$ref": "#/entities/ProjectFile" },
+      "description": "Original and repaired files for a project."
+    },
+    "/users/{userId}/projects/{projectId}/issues/{issueId}": {
+      "schema": { "$ref": "#/entities/ProjectIssue" },
+      "description": "Inspection issues detected and verified for a project."
+    },
+    "/users/{userId}/downloads/{downloadId}": {
+      "schema": { "$ref": "#/entities/DownloadLog" },
+      "description": "ZIP export download history for the user."
+    }
+  }
+}

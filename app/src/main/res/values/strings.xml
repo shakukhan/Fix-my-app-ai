@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">FixMyApp AI</string>
+    <string name="tagline">Upload. Check. Fix. Deploy.</string>
+    <string name="hero_headline">Fix Your Website Without Coding.</string>
+    <string name="sign_in_google">Sign in with Google</string>
+    <string name="upload_project">Upload Project</string>
+    <string name="fix_my_project">Fix My Project</string>
+    <string name="download_fixed">Download Fixed Project</string>
+    <string name="deploy_assistant">Deployment Assistant</string>
+</resources>
